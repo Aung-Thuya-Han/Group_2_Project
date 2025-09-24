@@ -1,0 +1,31 @@
+4 tabes are needed for this game as database.
+The followings are tables’ names and columns in each table.
+
+Game table
+- Id
+- Player_name
+- Money
+- Energy
+- Current_place
+- key_found
+
+Places table
+- Id
+- Name
+- X-coord
+- Y-coord
+
+Events table
+- Id
+- Name
+- money_change
+- energy_change
+- is_key
+- is_bully
+
+Events_location table
+- Id
+- game_id
+- event_id
+- place_id
+- Resolved

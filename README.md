@@ -1,110 +1,163 @@
-# 🚲 Bike in Town
+# 🚲 Bike in Town - Setup Instructions
 
-**Bike in Town** is a simple grid-based adventure game inspired by classic treasure
-hunt mechanics.  
-You start from HOME with some money and energy.
+This is the implementation of the "Bike in Town" game based on the requirements in README.md, using the flight simulator example as a model.
 
-Your task: find the hidden **Key** somewhere in town and return safely back home
-before you run out of resources.
+## Prerequisites
 
----
+- Python 3.10+
+- MySQL Server running locally
+- MySQL root access (or configured user)
 
-## 🎮 Gameplay
+## Setup Instructions
 
-- You always start at **HOME** with a small stash of **money** and **energy**.
-- **Money** is used to buy **energy drinks** (money buys energy).
-- **Energy** is used to ride your bike from one location to another
-(movement cost = distance).
-- Each location hides an **event** (reward or penalty). You can reveal it only once.
-- Your goal is to:
-  1. **Find the hidden Key.**
-  2. **Ride back to HOME** with enough energy.
-
-### Win condition
-
-- Return to HOME with the Key → ✅ You win.
-
-### Lose conditions
-
-- Run out of **energy** with no money to buy more.
-- Find the Key but can’t reach HOME due to lack of resources.
-
----
-
-## ⚡ Events
-
-Randomized across the map at the start of the game:
-
-- 4 × $10 notes (+10 money)  
-- 3 × $20 notes (+20 money)  
-- 2 × Energy stash (+20 energy)  
-- 2 × Bullies (lose half your money)  
-- 2 × Flat tire (–10 money)  
-- 1 × Crash (–20 energy)  
-- 1 × Hidden Key (needed to win)
-
----
-
-## 🕹️ Commands
-
-If playing in the CLI version:
-
-- `status` → Show your money, energy, location, key status.
-- `map` → Display the town grid (visited locations marked).
-- `buy <amount>` → Spend money to buy energy (1:1 by default).
-- `move <location>` → Ride to another location (cost = distance).
-- `open` → Reveal the event at the current location.
-- `quit` → Exit the game.
-
----
-
-## 🧩 How It Works
-
-### Database Schema
-
-- **locations**: all places on the map  
-- **game**: player state (money, energy, location, key found)  
-- **events**: possible events (cash, energy, bullies, etc.)  
-- **event_locations**: randomized mapping of events → locations per game  
-
-Check `tables_test.txt` for more details about the database tables.
-
-### Movement Cost
-
-- By default uses **Manhattan distance**:  
-
-  ```math
-  cost = |x2 - x1| + |y2 - y1|
-  ```
-
----
-
-## 🖥️ User Interface
-
-**CLI (current):** text commands in terminal:
-
-- `buy`: Use money to buy energy
-- `plan`: See the cost of moving to a location
-- `move`: Move to a location
-- `help`: Display list of commands
-- `quit`: Quit the game
-
----
-
-## 🚀 Running the Game
-
-### Requirements
-
-- Python 3.10+ (for CLI prototype)
-- MySQL or SQLite (for storing game state & map)
-
-### Setup
+### 1. Database Setup
 
 ```bash
-git clone https://github.com/Aung-Thuya-Han/Group_2_Project.git
-cd Group_2_Project
+# Connect to MySQL as root
+mysql -u root -p
 
-# create and activate venv (optional)
+# Run the database setup script
+source database_setup.sql
+
+# Or manually:
+mysql -u root -p < database_setup.sql
+```
+
+### 2. Python Environment Setup
+
+```bash
+# Create and activate virtual environment (optional but recommended)
 python -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### 3. Environment Configuration
+
+Set up your database credentials:
+
+```bash
+# Copy the example environment file
+cp .env.example .env
+
+# Edit .env with your MySQL credentials
+vim .env  # or use your preferred editor
+```
+
+Example `.env` file:
+
+```bash
+DATABASE_USERNAME=root
+DATABASE_PASSWORD=your_mysql_password
+```
+
+**Note:** The game will use `root` with no password by default
+if no `.env` file exists.
+
+### 4. Run the Game
+
+```bash
+python game.py
+```
+
+## Game Features
+
+### Map
+
+- 5x5 grid layout (25 locations)
+- HOME is at coordinates (0,0)
+- Manhattan distance movement system
+
+### Resources
+
+- **Money**: Used to buy energy drinks
+- **Energy**: Consumed when moving (cost = Manhattan distance)
+
+### Events (15 total, randomly distributed)
+
+- 4x $10 notes (+$10)
+- 3x $20 notes (+$20)
+- 2x Energy stash (+20 energy)
+- 2x Bullies (lose half money)
+- 2x Flat tire (-$10)
+- 1x Crash (-20 energy)
+- 1x Hidden Key (win condition)
+
+### Commands
+
+- `info` - Show current location, money, and energy
+- `map` - Display town map with visited locations
+- `locations` - Show reachable locations within energy range
+- `buy <amount>` - Buy energy drinks ($1 = 1 energy)
+- `move <location_name>` - Move to a location
+- `open` - Check for events at current location
+- `help` - Show available commands
+- `quit` - Exit game
+
+### Route-Based Road Conditions & Movement Cost
+
+Energy cost depends on the **specific route** between your starting point and destination:
+
+#### Energy Cost = Manhattan Distance × Route Terrain Multiplier
+
+**Route Conditions:**
+
+- 🛣️ **Excellent** (0.8x) - Main roads, paved paths, ambulance routes
+- 🚴 **Good** (1.0x) - Normal residential streets, standard energy cost
+- ⚠️ **Poor** (1.5x) - Side streets, construction zones, bumpy roads
+- 🧗 **Rough** (2.0x) - Dirt paths, sandy beaches, rocky coastlines
+
+**Route Examples:**
+- HOME → Library: Excellent paved path (1 × 0.8 = 1 energy)
+
+- Library → Cafe: Poor side street (1 × 1.5 = 2 energy)
+- Hospital → School: Excellent ambulance route (1 × 0.8 = 1 energy)
+- School → Hospital: Good regular route (1 × 1.0 = 1 energy)
+- Beach → Pier: Rough sandy path (1 × 2.0 = 2 energy)
+
+**Key Features:**
+
+- Routes are **bidirectional** but may have different conditions each way
+- Some routes have excellent infrastructure (emergency services, main roads)
+- Remote coastal areas have rough terrain requiring more energy
+- Construction zones and side streets create poor conditions
+
+### Win/Lose Conditions
+
+- **Win**: Find the key AND return to HOME
+- **Lose**: Run out of energy with no money to buy more
+
+## Database Schema
+
+The game uses 4 tables:
+- `game` - Player state
+- `locations` - Map locations (25 locations in 5x5 grid)
+- `events` - Event types (15 different events)
+- `event_locations` - Maps events to locations per game
+
+## Example Gameplay
+
+```bash
+🚲 BIKE IN TOWN 🚲
+Enter your name: Alice
+
+📍 You are at HOME
+What would you like to do? map
+
+🗺️  TOWN MAP
+   0 1 2 3 4
+0  🚲 ? ? ? ?
+1  ? ? ? ? ?
+2  ? ? ? ? ?
+3  ? ? ? ? ?
+4  ? ? ? ? ?
+
+What would you like to do? move park
+🚲 Moved to Park. Energy remaining: 99
+
+What would you like to do? open
+🎁 You found a $10 note on the ground!
+💰 Money: 100 → 110 (+10)
 ```

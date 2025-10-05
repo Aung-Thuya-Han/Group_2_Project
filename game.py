@@ -93,7 +93,8 @@ def get_route_info(from_location_id, to_location_id):
     """Get route information between two locations"""
     sql = """SELECT road_condition, terrain_multiplier
              FROM routes
-             WHERE from_location_id = %s AND to_location_id = %s"""
+             WHERE from_location_id = %s \
+               AND to_location_id = %s"""
     cursor = conn.cursor(dictionary=True)
     cursor.execute(sql, (from_location_id, to_location_id))
     result = cursor.fetchone()
@@ -133,11 +134,18 @@ def get_reachable_locations(current_location, all_locations, energy):
 
 def check_event_at_location(game_id, location_id):
     """Check if there's an unresolved event at the current location"""
-    sql = """SELECT el.*, e.name, e.money_change, e.energy_change, e.is_key,
-             e.is_bully, e.description
+    sql = """SELECT el.id AS event_location_id, \
+                    e.name, \
+                    e.money_change, \
+                    e.energy_change, \
+                    e.is_key,
+                    e.is_bully, \
+                    e.description
              FROM event_locations el
-             JOIN events e ON el.event_id = e.id
-             WHERE el.game_id = %s AND el.place_id = %s AND el.resolved = FALSE"""
+                      JOIN events e ON el.event_id = e.id
+             WHERE el.game_id = %s \
+               AND el.place_id = %s \
+               AND el.resolved = FALSE"""
     cursor = conn.cursor(dictionary=True)
     cursor.execute(sql, (game_id, location_id))
     return cursor.fetchone()
@@ -251,6 +259,62 @@ def show_quick_info(game_state, current_location):
     )
 
 
+def handle_location_event(game_id, current_location):
+    """Checks for and processes an event at the current location automatically."""
+    game_state = get_game_state(game_id)
+    event = check_event_at_location(game_id, current_location["id"])
+    if not event:
+        print("Sorry! No event in this location.")
+        return
+
+    while True:
+        choice = input(
+            "There is an event here! Do you want to open it? (Y/N): "
+        ).upper()
+        if choice == "Y":
+            event_location_id = event["event_location_id"]
+            print(f"🗝️ {event['description']}")
+            break
+        elif choice == "N":
+            print("You chose to skip the event for now!")
+            return
+        else:
+            print("Please choose Y or N!")
+
+    new_money = game_state["money"]
+    new_energy = game_state["energy"]
+    key_found = game_state["key_found"]
+
+    # Get the correct ID for resolving the event
+
+    if event["is_bully"]:
+        print("💥 Oh no! You ran into a Bully! They took half your money.")
+        money_lost = new_money // 2
+        new_money = new_money - money_lost
+
+    elif event["money_change"] != 0:
+        new_money += event["money_change"]
+
+    if event["energy_change"] != 0:
+        new_energy += event["energy_change"]
+
+    if event["is_key"]:
+        key_found = True
+
+    # Update state
+    update_game_state(game_id, money=new_money, energy=new_energy, key_found=key_found)
+    resolve_event(event_location_id)
+
+    # Display changes
+    if new_money != game_state["money"]:
+        change = new_money - game_state["money"]
+        print(f"💰 Money: ${game_state['money']} → ${new_money} ({change:+})")
+
+    if new_energy != game_state["energy"]:
+        change = new_energy - game_state["energy"]
+        print(f"⚡️ Energy: {game_state['energy']} → {new_energy} ({change:+})")
+
+
 def main_game():
     # Ask to show the story
     story_dialog = input("Do you want to read the background story? (Y/N): ").upper()
@@ -299,7 +363,6 @@ def main_game():
             print("locations - Show reachable locations within energy range")
             print("buy <amount> - Buy energy drinks (1$ = 1 energy)")
             print("move <location_name> - Move to a location")
-            print("open - Check for events at current location")
             print("quit - Exit the game")
 
         elif command == "info":
@@ -391,45 +454,37 @@ def main_game():
                     print(
                         f"🚲 Moved to {target_location['name']}{road_msg} Energy remaining: {new_energy}"
                     )
+                    handle_location_event(game_id, target_location)
+                # Check win/lose conditions
+            game_state = get_game_state(game_id)
+            current_location = get_location_info(game_state["current_place"])
 
-        elif command == "open":
-            event = check_event_at_location(game_id, current_location["id"])
-            if not event:
-                print("❌ Nothing interesting here.")
-            else:
-                print(f"\n🎁 {event['description']}")
+            # Check if won (key found and at home)
+            if game_state["key_found"] and current_location["is_home"]:
+                print("\n🎉 CONGRATULATIONS! 🎉")
+                print("You found the key and made it back home!")
+                print(
+                    f"Final score - Money: ${game_state['money']}, Energy: {game_state['energy']}"
+                )
+                game_over = True
 
-                new_money = game_state["money"]
-                new_energy = game_state["energy"]
+                # Check if lost (no energy and no money, or can't reach home)
 
-                if event["is_bully"]:
-                    # Bullies take half your money
-                    new_money = new_money // 2
-                elif event["money_change"] != 0:
-                    new_money += event["money_change"]
+            if game_state["energy"] == 0 and game_state["money"] == 0:
+                print("\n💀 GAME OVER!")
+                print("You ran out of both energy and money!")
+                game_over = True
 
-                if event["energy_change"] != 0:
-                    new_energy += event["energy_change"]
-
-                if event["is_key"]:
-                    update_game_state(
-                        game_id, money=new_money, energy=new_energy, key_found=True
-                    )
-                    print("🗝️ You found the key! Now return home to win!")
+            elif game_state["energy"] == 0:
+                # Check if can buy energy
+                if game_state["money"] == 0:
+                    print("\n💀 GAME OVER!")
+                    print("You ran out of energy and have no money to buy more!")
+                    game_over = True
                 else:
-                    update_game_state(game_id, money=new_money, energy=new_energy)
-
-                if new_money != game_state["money"]:
-                    change = new_money - game_state["money"]
-                    print(f"💰 Money: {game_state['money']} → {new_money} ({change:+})")
-
-                if new_energy != game_state["energy"]:
-                    change = new_energy - game_state["energy"]
                     print(
-                        f"⚡ Energy: {game_state['energy']} → {new_energy} ({change:+})"
+                        "⚠️ Warning: You're out of energy! Use 'buy' command to purchase energy drinks."
                     )
-
-                resolve_event(event["id"])
 
         elif command == "quit":
             print("👋 Thanks for playing!")
@@ -437,36 +492,6 @@ def main_game():
 
         else:
             print("❌ Unknown command. Type 'help' for available commands.")
-
-        # Check win/lose conditions
-        game_state = get_game_state(game_id)
-
-        # Check if won (key found and at home)
-        if game_state["key_found"] and current_location["is_home"]:
-            print("\n🎉 CONGRATULATIONS! 🎉")
-            print("You found the key and made it back home!")
-            print(
-                f"Final score - Money: ${game_state['money']}, Energy: {game_state['energy']}"
-            )
-            game_over = True
-            return
-
-        # Check if lost (no energy and no money, or can't reach home)
-        elif game_state["energy"] == 0 and game_state["money"] == 0:
-            print("\n💀 GAME OVER!")
-            print("You ran out of both energy and money!")
-            game_over = True
-
-        elif game_state["energy"] == 0:
-            # Check if can buy energy
-            if game_state["money"] == 0:
-                print("\n💀 GAME OVER!")
-                print("You ran out of energy and have no money to buy more!")
-                game_over = True
-            else:
-                print(
-                    "⚠️ Warning: You're out of energy! Use 'buy' command to purchase energy drinks."
-                )
 
 
 if __name__ == "__main__":

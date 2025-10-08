@@ -3,11 +3,56 @@ import story
 import mysql.connector
 from dotenv import load_dotenv
 import os
+from typing import TypedDict, Optional, Any
 
 load_dotenv()
 
 DATABASE_USERNAME = os.environ.get("DATABASE_USERNAME", "root")
 DATABASE_PASSWORD = os.environ.get("DATABASE_PASSWORD", "")
+
+
+# Type definitions for database rows
+class LocationRow(TypedDict):
+    id: int
+    name: str
+    x_coord: int
+    y_coord: int
+    is_home: bool
+
+
+class EventRow(TypedDict):
+    id: int
+    name: str
+    money_change: int
+    energy_change: int
+    is_key: bool
+    is_bully: bool
+    description: str
+
+
+class GameStateRow(TypedDict):
+    id: int
+    player_name: str
+    money: int
+    energy: int
+    current_place: int
+    key_found: bool
+
+
+class RouteInfoRow(TypedDict):
+    road_condition: str
+    terrain_multiplier: float
+
+
+class EventLocationRow(TypedDict):
+    event_location_id: int
+    name: str
+    money_change: int
+    energy_change: int
+    is_key: bool
+    is_bully: bool
+    description: str
+
 
 # Database connection
 conn = mysql.connector.connect(
@@ -20,25 +65,25 @@ conn = mysql.connector.connect(
 )
 
 
-def get_locations():
+def get_locations() -> list[LocationRow]:
     """Get all locations from the database"""
     sql = "SELECT * FROM locations ORDER BY x_coord, y_coord"
     with conn.cursor(dictionary=True) as cursor:
         cursor.execute(sql)
         result = cursor.fetchall()
-    return result
+    return result  # type: ignore
 
 
-def get_events():
+def get_events() -> list[EventRow]:
     """Get all events from the database"""
     sql = "SELECT * FROM events"
     with conn.cursor(dictionary=True) as cursor:
         cursor.execute(sql)
         result = cursor.fetchall()
-    return result
+    return result  # type: ignore
 
 
-def create_game(player_name, start_money, start_energy):
+def create_game(player_name: str, start_money: int, start_energy: int) -> int:
     """Create a new game instance"""
     # Get HOME location (id=1)
     home_location = 1
@@ -47,6 +92,8 @@ def create_game(player_name, start_money, start_energy):
         sql = "INSERT INTO game (player_name, money, energy, current_place) VALUES (%s, %s, %s, %s)"
         cursor.execute(sql, (player_name, start_money, start_energy, home_location))
         game_id = cursor.lastrowid
+        if game_id is None:
+            raise ValueError("Failed to create game: no game_id returned")
 
         # Randomly assign events to locations (excluding HOME)
         locations = get_locations()
@@ -65,32 +112,32 @@ def create_game(player_name, start_money, start_energy):
     return game_id
 
 
-def get_game_state(game_id):
+def get_game_state(game_id: int) -> Optional[GameStateRow]:
     """Get current game state"""
     sql = "SELECT * FROM game WHERE id = %s"
     with conn.cursor(dictionary=True) as cursor:
         cursor.execute(sql, (game_id,))
         result = cursor.fetchone()
-    return result
+    return result  # type: ignore
 
 
-def get_location_info(location_id):
+def get_location_info(location_id: int) -> Optional[LocationRow]:
     """Get location information"""
     sql = "SELECT * FROM locations WHERE id = %s"
     with conn.cursor(dictionary=True) as cursor:
         cursor.execute(sql, (location_id,))
         result = cursor.fetchone()
-    return result
+    return result  # type: ignore
 
 
-def calculate_manhattan_distance(loc1, loc2):
+def calculate_manhattan_distance(loc1: LocationRow, loc2: LocationRow) -> int:
     """Calculate Manhattan distance between two locations"""
     return abs(loc1["x_coord"] - loc2["x_coord"]) + abs(
         loc1["y_coord"] - loc2["y_coord"]
     )
 
 
-def get_route_info(from_location_id, to_location_id):
+def get_route_info(from_location_id: int, to_location_id: int) -> RouteInfoRow:
     """Get route information between two locations"""
     sql = """SELECT road_condition, terrain_multiplier
              FROM routes
@@ -98,16 +145,16 @@ def get_route_info(from_location_id, to_location_id):
                AND to_location_id = %s"""
     with conn.cursor(dictionary=True) as cursor:
         cursor.execute(sql, (from_location_id, to_location_id))
-        result = cursor.fetchone()
+        result: Optional[Any] = cursor.fetchone()
 
     if result:
-        return result
+        return result  # type: ignore
     else:
         # Default road condition if no specific route exists
-        return {"road_condition": "good", "terrain_multiplier": 1.0}
+        return RouteInfoRow(road_condition="good", terrain_multiplier=1.0)
 
 
-def calculate_energy_cost(current_location, target_location):
+def calculate_energy_cost(current_location: LocationRow, target_location: LocationRow) -> int:
     """Calculate energy cost including route-specific road conditions"""
     base_distance = calculate_manhattan_distance(current_location, target_location)
     route_info = get_route_info(current_location["id"], target_location["id"])
@@ -115,9 +162,9 @@ def calculate_energy_cost(current_location, target_location):
     return int(base_distance * terrain_multiplier)
 
 
-def get_reachable_locations(current_location, all_locations, energy):
+def get_reachable_locations(current_location: LocationRow, all_locations: list[LocationRow], energy: int) -> list[dict[str, Any]]:
     """Get locations within energy range"""
-    reachable = []
+    reachable: list[dict[str, Any]] = []
     for location in all_locations:
         if location["id"] != current_location["id"]:
             distance = calculate_manhattan_distance(current_location, location)
@@ -133,7 +180,7 @@ def get_reachable_locations(current_location, all_locations, energy):
     return sorted(reachable, key=lambda x: x["energy_cost"])
 
 
-def check_event_at_location(game_id, location_id):
+def check_event_at_location(game_id: int, location_id: int) -> Optional[EventLocationRow]:
     """Check if there's an unresolved event at the current location"""
     sql = """SELECT el.id AS event_location_id, \
                     e.name, \
@@ -150,20 +197,20 @@ def check_event_at_location(game_id, location_id):
     with conn.cursor(dictionary=True) as cursor:
         cursor.execute(sql, (game_id, location_id))
         result = cursor.fetchone()
-    return result
+    return result  # type: ignore
 
 
-def resolve_event(event_location_id):
+def resolve_event(event_location_id: int) -> None:
     """Mark an event as resolved"""
     sql = "UPDATE event_locations SET resolved = TRUE WHERE id = %s"
     with conn.cursor(dictionary=True) as cursor:
         cursor.execute(sql, (event_location_id,))
 
 
-def update_game_state(game_id, money=None, energy=None, location=None, key_found=None):
+def update_game_state(game_id: int, money: Optional[int] = None, energy: Optional[int] = None, location: Optional[int] = None, key_found: Optional[bool] = None) -> None:
     """Update game state"""
-    updates = []
-    values = []
+    updates: list[str] = []
+    values: list[Any] = []
 
     if money is not None:
         updates.append("money = %s")
@@ -185,7 +232,7 @@ def update_game_state(game_id, money=None, energy=None, location=None, key_found
             cursor.execute(sql, values)
 
 
-def display_map(current_location, all_locations, visited_locations):
+def display_map(current_location: LocationRow, all_locations: list[LocationRow], visited_locations: set[int]) -> None:
     """Display the town map"""
     print("\n🗺️  TOWN MAP")
     print("=" * 40)
@@ -212,7 +259,7 @@ def display_map(current_location, all_locations, visited_locations):
     print("\nLegend: 🏠=Home 🚲=You ✓=Visited ?=Unknown")
 
 
-def show_locations(current_location, all_locations, energy):
+def show_locations(current_location: LocationRow, all_locations: list[LocationRow], energy: int) -> None:
     """Display reachable locations with energy costs and route-specific road conditions"""
     print(f"\n📍 REACHABLE DESTINATIONS")
     print("=" * 55)
@@ -254,16 +301,20 @@ def show_locations(current_location, all_locations, energy):
     print("Routes: 🛣️=Excellent ⚠️=Poor 🚴=Good 🧗=Rough")
 
 
-def show_quick_info(game_state, current_location):
+def show_quick_info(game_state: GameStateRow, current_location: LocationRow) -> None:
     """Show quick status - location, money, and energy only"""
     print(
         f"📍 {current_location['name']} | 💰 ${game_state['money']} | ⚡ {game_state['energy']} energy"
     )
 
 
-def handle_location_event(game_id, current_location):
+def handle_location_event(game_id: int, current_location: LocationRow) -> None:
     """Checks for and processes an event at the current location automatically."""
     game_state = get_game_state(game_id)
+    if not game_state:
+        print("Error: Game state not found.")
+        return
+
     event = check_event_at_location(game_id, current_location["id"])
     if not event:
         print("Sorry! No event in this location.")
@@ -317,7 +368,7 @@ def handle_location_event(game_id, current_location):
         print(f"⚡️ Energy: {game_state['energy']} → {new_energy} ({change:+})")
 
 
-def main_game():
+def main_game() -> None:
     # Ask to show the story
     story_dialog = input("Do you want to read the background story? (Y/N): ").upper()
     if story_dialog == "Y":
@@ -350,7 +401,15 @@ def main_game():
     while not game_over:
         # Get current state
         game_state = get_game_state(game_id)
+        if not game_state:
+            print("Error: Game state not found.")
+            break
+
         current_location = get_location_info(game_state["current_place"])
+        if not current_location:
+            print("Error: Current location not found.")
+            break
+
         all_locations = get_locations()
 
         print(f"\n📍 You are at {current_location['name']}")
@@ -459,7 +518,14 @@ def main_game():
                     handle_location_event(game_id, target_location)
                 # Check win/lose conditions
             game_state = get_game_state(game_id)
+            if not game_state:
+                print("Error: Game state not found.")
+                break
+
             current_location = get_location_info(game_state["current_place"])
+            if not current_location:
+                print("Error: Current location not found.")
+                break
 
             # Check if won (key found and at home)
             if game_state["key_found"] and current_location["is_home"]:

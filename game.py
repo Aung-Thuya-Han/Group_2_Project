@@ -261,7 +261,7 @@ def display_map(current_location: LocationRow, all_locations: list[LocationRow],
 
 def show_locations(current_location: LocationRow, all_locations: list[LocationRow], energy: int) -> None:
     """Display reachable locations with energy costs and route-specific road conditions"""
-    print(f"\n📍 REACHABLE DESTINATIONS")
+    print("\n📍 REACHABLE DESTINATIONS")
     print("=" * 55)
     print(f"Current location: {current_location['name']}")
     print(f"Available energy: {energy}")

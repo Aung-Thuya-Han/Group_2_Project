@@ -23,18 +23,18 @@ conn = mysql.connector.connect(
 def get_locations():
     """Get all locations from the database"""
     sql = "SELECT * FROM locations ORDER BY x_coord, y_coord"
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute(sql)
-    result = cursor.fetchall()
+    with conn.cursor(dictionary=True) as cursor:
+        cursor.execute(sql)
+        result = cursor.fetchall()
     return result
 
 
 def get_events():
     """Get all events from the database"""
     sql = "SELECT * FROM events"
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute(sql)
-    result = cursor.fetchall()
+    with conn.cursor(dictionary=True) as cursor:
+        cursor.execute(sql)
+        result = cursor.fetchall()
     return result
 
 
@@ -43,25 +43,24 @@ def create_game(player_name, start_money, start_energy):
     # Get HOME location (id=1)
     home_location = 1
 
-    sql = "INSERT INTO game (player_name, money, energy, current_place) VALUES (%s, %s, %s, %s)"
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute(sql, (player_name, start_money, start_energy, home_location))
-    game_id = cursor.lastrowid
+    with conn.cursor(dictionary=True) as cursor:
+        sql = "INSERT INTO game (player_name, money, energy, current_place) VALUES (%s, %s, %s, %s)"
+        cursor.execute(sql, (player_name, start_money, start_energy, home_location))
+        game_id = cursor.lastrowid
 
-    # Randomly assign events to locations (excluding HOME)
-    locations = get_locations()
-    events = get_events()
+        # Randomly assign events to locations (excluding HOME)
+        locations = get_locations()
+        events = get_events()
 
-    # Get non-home locations
-    non_home_locations = [loc for loc in locations if not loc["is_home"]]
-    random.shuffle(non_home_locations)
+        # Get non-home locations
+        non_home_locations = [loc for loc in locations if not loc["is_home"]]
+        random.shuffle(non_home_locations)
 
-    # Assign events to random locations
-    for i, event in enumerate(events):
-        if i < len(non_home_locations):
-            sql = "INSERT INTO event_locations (game_id, event_id, place_id) VALUES (%s, %s, %s)"
-            cursor = conn.cursor(dictionary=True)
-            cursor.execute(sql, (game_id, event["id"], non_home_locations[i]["id"]))
+        # Assign events to random locations
+        for i, event in enumerate(events):
+            if i < len(non_home_locations):
+                sql = "INSERT INTO event_locations (game_id, event_id, place_id) VALUES (%s, %s, %s)"
+                cursor.execute(sql, (game_id, event["id"], non_home_locations[i]["id"]))
 
     return game_id
 
@@ -69,17 +68,19 @@ def create_game(player_name, start_money, start_energy):
 def get_game_state(game_id):
     """Get current game state"""
     sql = "SELECT * FROM game WHERE id = %s"
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute(sql, (game_id,))
-    return cursor.fetchone()
+    with conn.cursor(dictionary=True) as cursor:
+        cursor.execute(sql, (game_id,))
+        result = cursor.fetchone()
+    return result
 
 
 def get_location_info(location_id):
     """Get location information"""
     sql = "SELECT * FROM locations WHERE id = %s"
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute(sql, (location_id,))
-    return cursor.fetchone()
+    with conn.cursor(dictionary=True) as cursor:
+        cursor.execute(sql, (location_id,))
+        result = cursor.fetchone()
+    return result
 
 
 def calculate_manhattan_distance(loc1, loc2):
@@ -95,9 +96,9 @@ def get_route_info(from_location_id, to_location_id):
              FROM routes
              WHERE from_location_id = %s \
                AND to_location_id = %s"""
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute(sql, (from_location_id, to_location_id))
-    result = cursor.fetchone()
+    with conn.cursor(dictionary=True) as cursor:
+        cursor.execute(sql, (from_location_id, to_location_id))
+        result = cursor.fetchone()
 
     if result:
         return result
@@ -146,16 +147,17 @@ def check_event_at_location(game_id, location_id):
              WHERE el.game_id = %s \
                AND el.place_id = %s \
                AND el.resolved = FALSE"""
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute(sql, (game_id, location_id))
-    return cursor.fetchone()
+    with conn.cursor(dictionary=True) as cursor:
+        cursor.execute(sql, (game_id, location_id))
+        result = cursor.fetchone()
+    return result
 
 
 def resolve_event(event_location_id):
     """Mark an event as resolved"""
     sql = "UPDATE event_locations SET resolved = TRUE WHERE id = %s"
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute(sql, (event_location_id,))
+    with conn.cursor(dictionary=True) as cursor:
+        cursor.execute(sql, (event_location_id,))
 
 
 def update_game_state(game_id, money=None, energy=None, location=None, key_found=None):
@@ -179,8 +181,8 @@ def update_game_state(game_id, money=None, energy=None, location=None, key_found
     if updates:
         sql = f"UPDATE game SET {', '.join(updates)} WHERE id = %s"
         values.append(game_id)
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(sql, values)
+        with conn.cursor(dictionary=True) as cursor:
+            cursor.execute(sql, values)
 
 
 def display_map(current_location, all_locations, visited_locations):

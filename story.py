@@ -25,8 +25,9 @@ locations are well-maintained while others might surprise you with their difficu
 Plan your route wisely, considering not just how far you're going, but what kind of
 terrain you'll encounter along the way!
 
-The treasure awaits, but only if you can find the key and return home safely. Good luck,
-young explorer!'''
+The treasure awaits, but only if you can find the key and return home safely. 
+
+Good luck, young explorer!'''
 
 # Set column width to 80 characters
 wrapper = textwrap.TextWrapper(width=80, break_long_words=False, replace_whitespace=False)
@@ -34,5 +35,41 @@ wrapper = textwrap.TextWrapper(width=80, break_long_words=False, replace_whitesp
 word_list = wrapper.wrap(text=story)
 
 
+def justify_line(line: str, width: int = 80) -> str:
+    """Justify a line of text by distributing spaces evenly"""
+    # Don't justify if it's the last line or too short
+    words = line.split()
+    if len(words) <= 1:
+        return line
+
+    # Calculate total spaces needed
+    total_chars = sum(len(word) for word in words)
+    total_spaces = width - total_chars
+    gaps = len(words) - 1
+
+    if gaps == 0:
+        return line
+
+    # Distribute spaces evenly
+    spaces_per_gap = total_spaces // gaps
+    extra_spaces = total_spaces % gaps
+
+    result = []
+    for i, word in enumerate(words[:-1]):
+        result.append(word)
+        result.append(' ' * (spaces_per_gap + (1 if i < extra_spaces else 0)))
+    result.append(words[-1])
+
+    return ''.join(result)
+
+
 def get_story():
-    return word_list
+    """Get the story with justified text formatting"""
+    justified_lines = []
+    for i, line in enumerate(word_list):
+        # Don't justify the last line or empty lines
+        if i == len(word_list) - 1 or len(line.strip()) == 0:
+            justified_lines.append(line)
+        else:
+            justified_lines.append(justify_line(line))
+    return justified_lines

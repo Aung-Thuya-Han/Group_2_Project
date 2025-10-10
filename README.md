@@ -131,9 +131,10 @@ Energy cost depends on the **specific route** between your starting point and de
 
 ## Database Schema
 
-The game uses 4 tables:
+The game uses 5 tables:
 - `game` - Player state
 - `locations` - Map locations (25 locations in 5x5 grid)
+- `routes` - Road conditions between location pairs (bidirectional)
 - `events` - Event types (15 different events)
 - `event_locations` - Maps events to locations per game
 
